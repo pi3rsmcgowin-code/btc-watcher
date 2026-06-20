@@ -1,13 +1,13 @@
 name: btc-long-watcher
-
+ 
 on:
   schedule:
     - cron: "*/30 * * * *"   # every 30 min (UTC); GitHub may delay under load
-  workflow_dispatch: {}       # adds a manual "Run workflow" button
-
+  workflow_dispatch: {}       # manual "Run workflow" button
+ 
 permissions:
-  contents: write             # lets it save state.json back so it won't re-spam
-
+  contents: write             # save state.json back so it won't re-spam
+ 
 jobs:
   watch:
     runs-on: ubuntu-latest
@@ -22,6 +22,7 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python watch.py
       - name: Save state
         run: |
@@ -30,5 +31,5 @@ jobs:
             git config user.email "actions@github.com"
             git add state.json
             git commit -m "update state"
-            git pull --rebase && git push
+            git pull --rebase --autostash && git push
           fi
