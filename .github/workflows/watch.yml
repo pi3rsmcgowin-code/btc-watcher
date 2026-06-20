@@ -2,7 +2,7 @@ name: btc-long-watcher
  
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 min (UTC); GitHub may delay under load
+    - cron: "*/5 * * * *"    # every 5 min (UTC); GitHub may delay/skip some runs under load
   workflow_dispatch: {}
  
 permissions:
@@ -24,6 +24,8 @@ jobs:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          USE_AI_EXIT: ${{ vars.USE_AI_EXIT }}
+          HEARTBEAT_HOURS: ${{ vars.HEARTBEAT_HOURS }}
         run: python watch.py
       - name: Save state and paper log
         run: |
