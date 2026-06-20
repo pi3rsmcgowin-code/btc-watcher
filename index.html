@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Funding-Reversion · Live</title>
+<style>
+  :root{--bg:#06080c;--panel:rgba(20,26,36,.72);--panel2:rgba(14,19,27,.9);--bord:rgba(255,255,255,.07);
+    --txt:#e9eef6;--mut:#76828f;--mut2:#566472;--long:#1fe39a;--short:#ff4d63;--wait:#ffb33c;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--sans:Inter,system-ui,-apple-system,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(900px 500px at 50% -10%,rgba(31,227,154,.06),transparent 60%),var(--bg);
+    color:var(--txt);font-family:var(--sans);min-height:100vh;display:flex;justify-content:center;padding:16px;-webkit-font-smoothing:antialiased}
+  .app{width:100%;max-width:480px;display:flex;flex-direction:column;gap:13px}
+  .bar{display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;letter-spacing:.12em;font-size:12.5px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--mut);box-shadow:0 0 12px var(--mut)}
+  .src{font-family:var(--mono);font-size:11px;color:var(--mut);background:var(--panel2);border:1px solid var(--bord);border-radius:8px;padding:5px 7px;outline:none;cursor:pointer}
+  .card{background:var(--panel);border:1px solid var(--bord);border-radius:18px;backdrop-filter:blur(14px);padding:18px;position:relative;overflow:hidden}
+  .eyebrow{font-size:11px;letter-spacing:.2em;color:var(--mut);font-weight:700;display:flex;justify-content:space-between}
+  .signal{font-size:34px;font-weight:900;letter-spacing:-.01em;line-height:1.05;margin:12px 0 6px}
+  .signal.go{color:var(--long);text-shadow:0 0 30px rgba(31,227,154,.4)}
+  .signal.in{color:var(--long)}
+  .signal.wait{color:var(--wait)}
+  .sub{font-size:13.5px;color:var(--mut);line-height:1.55}
+  .sub b{color:var(--txt);font-family:var(--mono);font-weight:600}
+  .liverow{display:flex;gap:9px;margin-top:14px}
+  .stat{flex:1;background:var(--panel2);border:1px solid var(--bord);border-radius:12px;padding:10px 11px}
+  .stat .k{font-size:10px;letter-spacing:.11em;color:var(--mut);font-weight:700}
+  .stat .v{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:4px}
+  .pos{color:var(--long)} .neg{color:var(--short)} .neu{color:var(--txt)}
+  .gauge{height:10px;border-radius:6px;margin:14px 0 6px;position:relative;
+    background:linear-gradient(90deg,var(--long),#3a4654 22%,#3a4654 78%,var(--short))}
+  .gmark{position:absolute;top:-4px;width:3px;height:18px;border-radius:2px}
+  .gmark.now{background:#fff} .gmark.thr{background:var(--long)}
+  .glab{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--mut2)}
+  svg.hist{margin-top:12px;width:100%;height:96px}
+  .pxtabs{display:flex;gap:5px;margin:6px 0 10px}
+  .pxtabs button{flex:1;font-family:var(--mono);font-size:11px;color:var(--mut);background:rgba(255,255,255,.03);border:1px solid var(--bord);border-radius:8px;padding:6px 0;cursor:pointer}
+  .pxtabs button.on{color:#04140d;background:var(--long);border-color:transparent;font-weight:700}
+  .pxtip{position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--bord2);border-radius:8px;padding:6px 9px;font-family:var(--mono);font-size:11px;color:var(--txt);white-space:nowrap;transform:translate(-50%,-128%);display:none;z-index:5;text-align:center}
+  .rule{font-size:12.5px;color:var(--mut);line-height:1.6;margin-top:14px;padding-top:13px;border-top:1px solid var(--bord)}
+  .rule b{color:var(--txt)}
+  .upd{font-family:var(--mono);font-size:11px;color:var(--mut);text-align:center}
+  .err{display:none;color:var(--short);font-family:var(--mono);font-size:12px;text-align:center;padding:8px;border:1px solid rgba(255,77,99,.25);border-radius:10px;background:rgba(255,77,99,.06)}
+  .foot{font-size:11px;color:var(--mut2);text-align:center;line-height:1.6;padding:0 8px 6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="bar">
+    <div class="brand"><span class="dot" id="dot"></span>BTC FUNDING-REVERSION · LIVE</div>
+    <select class="src" id="src"><option value="auto">auto</option><option value="okx">okx</option><option value="hyperliquid">hyperliquid</option><option value="binance">binance</option></select>
+  </div>
+  <div class="err" id="err"></div>
+
+  <div class="card">
+    <div class="eyebrow"><span>SIGNAL · THE PROVEN RULE</span><span id="px">—</span></div>
+    <div class="signal wait" id="sig">loading…</div>
+    <div class="sub" id="detail">fetching funding history…</div>
+    <div class="liverow" id="trade" style="display:none">
+      <div class="stat"><div class="k">HELD</div><div class="v neu" id="held">—</div></div>
+      <div class="stat"><div class="k">EXIT IN</div><div class="v neu" id="left">—</div></div>
+      <div class="stat"><div class="k">TRADE P&L</div><div class="v neu" id="pnl">—</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow"><span>BTC PRICE</span><span id="pxchg">—</span></div>
+    <div id="pxtabs" class="pxtabs">
+      <button data-r="1D">1D</button><button data-r="5D">5D</button><button data-r="1M" class="on">1M</button><button data-r="1Y">1Y</button><button data-r="3Y">3Y</button><button data-r="ALL">ALL</button>
+    </div>
+    <div id="pxwrap" style="position:relative">
+      <svg id="pxchart" viewBox="0 0 460 150" preserveAspectRatio="none" style="height:150px;width:100%;display:block;touch-action:none"></svg>
+      <div id="pxtip" class="pxtip"></div>
+    </div>
+    <div class="glab"><span id="pxlo">—</span><span id="pxsetuplabel" style="color:var(--long)">▌ long setups</span><span id="pxhi">—</span></div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow"><span>FUNDING NOW vs HISTORY</span><span id="ranklab">—</span></div>
+    <div class="liverow">
+      <div class="stat"><div class="k">CURRENT FUNDING</div><div class="v neu" id="curf">—</div></div>
+      <div class="stat"><div class="k">5th PCT THRESHOLD</div><div class="v" id="thr" style="color:var(--long)">—</div></div>
+    </div>
+    <div class="gauge"><div class="gmark thr" id="gthr"></div><div class="gmark now" id="gnow"></div></div>
+    <div class="glab"><span>crowded short (long setup)</span><span>crowded long</span></div>
+    <svg class="hist" id="hist" viewBox="0 0 460 96" preserveAspectRatio="none"></svg>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow"><span>PAPER PORTFOLIO · 1x</span><span id="pstatus">—</span></div>
+    <div class="liverow">
+      <div class="stat"><div class="k">VALUE</div><div class="v neu" id="p_val">—</div></div>
+      <div class="stat"><div class="k">RETURN</div><div class="v neu" id="p_ret">—</div></div>
+      <div class="stat"><div class="k">WIN RATE</div><div class="v neu" id="p_wr">—</div></div>
+    </div>
+    <svg class="hist" id="peq" viewBox="0 0 460 70" preserveAspectRatio="none" style="height:70px"></svg>
+    <div class="glab"><span id="p_start">start $65,000</span><span id="p_bh">—</span></div>
+    <div id="phold" style="margin-top:11px;font-size:12.5px;color:var(--mut);line-height:1.6"></div>
+    <div id="ptrades" style="margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--mut)"></div>
+    <div id="pmsg" class="sub" style="margin-top:10px;display:none"></div>
+  </div>
+
+  <div class="rule" id="rule"></div>
+
+  <div class="card">
+    <div class="eyebrow" id="helptoggle" style="cursor:pointer;user-select:none"><span>❔ HELP — what do these mean?</span><span id="helpchev">▸</span></div>
+    <div id="helpbody" style="display:none;margin-top:14px;font-size:13px;color:var(--mut);line-height:1.65">
+      <p style="margin-bottom:12px"><b style="color:var(--txt)">Funding rate</b> — a fee paid every 8h between traders holding BTC perpetual futures, which keeps the perp priced near real BTC. <b style="color:var(--long)">Negative</b> = shorts pay longs = the crowd is leaning short (fearful). <b style="color:var(--short)">Positive</b> = longs pay shorts = crowd leaning long (greedy). It's a crowd-positioning meter.</p>
+      <p style="margin-bottom:12px"><b style="color:var(--txt)">The whole idea</b> — when funding is deeply negative, almost everyone is shorting. Crowded trades tend to reverse (shorts get squeezed), so you go <b>long</b> against them and also collect the negative funding as a bonus while you hold.</p>
+      <p style="margin-bottom:6px"><b style="color:var(--txt)">SIGNAL card</b></p>
+      <ul style="margin:0 0 12px 18px;padding:0">
+        <li><b>WAIT</b> = no setup, stay flat. <b style="color:var(--long)">LONG SETUP</b> = funding hit the bottom 5%, enter long. <b>IN TRADE</b> = you're holding, with time held, exit countdown, live P&L.</li>
+        <li>The <b>$ number</b> top-right is the current BTC price.</li>
+      </ul>
+      <p style="margin-bottom:6px"><b style="color:var(--txt)">BTC PRICE card</b> — last ~12 days of price. <b style="color:var(--long)">Green bands</b> mark times funding was at/below the threshold (where the rule would go long).</p>
+      <p style="margin:10px 0 6px"><b style="color:var(--txt)">FUNDING NOW vs HISTORY</b></p>
+      <ul style="margin:0 0 12px 18px;padding:0">
+        <li><b>Current funding</b> = the live rate now. <b>5th pct threshold</b> = how low it must go to trigger a long.</li>
+        <li><b>Percentile</b> (e.g. 25th) = where funding ranks vs its own history. You want it down near the 5th (or lower).</li>
+        <li><b>Gauge / histogram</b>: white line = funding now, green dashed line = threshold. When white sits left of green, it's crowded-short enough to trade.</li>
+      </ul>
+      <p style="margin-bottom:6px"><b style="color:var(--txt)">PAPER PERFORMANCE</b> — simulated trades (no real money) at 1x, including the funding carry and a 0.07% cost, so it matches the backtest. <b>Total</b> = compounded return; compare it to <b>BTC since start</b> — matching that at lower risk is the goal.</p>
+      <p><b style="color:var(--txt)">Not financial advice.</b> This shows when the edge is live; sizing and execution are yours. Keep leverage 1–2x.</p>
+    </div>
+  </div>
+  <div class="upd" id="upd"></div>
+  <div class="foot">Signal only — sizing and execution are yours. The rule is a low-drawdown dip-buy validated on 2024–26 (a bull stretch); a sustained bear weakens it. Hold ~40h, size 1–2x. Not financial advice.</div>
+</div>
+
+<script>
+const HOLD_H=40, REFRESH_MS=60000;
+const pct=(s,q)=>{if(!s.length)return NaN;const i=(s.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(i-lo);};
+const rank=(s,v)=>{let lo=0,hi=s.length;while(lo<hi){const m=(lo+hi)>>1;if(s[m]<v)lo=m+1;else hi=m;}return lo/s.length;};
+function signalState(history,thr,now){
+  const cur=history[history.length-1][1];
+  let trig=null;
+  for(let i=1;i<history.length;i++){if(history[i][1]<=thr&&history[i-1][1]>thr)trig=history[i][0];}
+  if(history[0][1]<=thr&&trig===null)trig=history[0][0];
+  const HOLD=HOLD_H*3600*1000;
+  if(trig!==null&&now-trig<HOLD)return{cur,state:"IN_TRADE",trig,heldMs:now-trig,leftMs:HOLD-(now-trig)};
+  if(cur<=thr)return{cur,state:"LONG_SETUP",trig:now};
+  return{cur,state:"WAIT",trig};
+}
+
+const J=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json();};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+// ---- data sources (return {funding:[[t,rate]...asc], candles:[[t,close]...asc]}) ----
+async function okx(){
+  let after=Date.now(),fund=[];
+  for(let p=0;p<6;p++){const j=await J(`https://www.okx.com/api/v5/public/funding-rate-history?instId=BTC-USDT-SWAP&limit=100&after=${after}`);
+    const d=j.data||[];if(!d.length)break;for(const r of d)fund.push([+r.fundingTime,+r.fundingRate]);after=Math.min(...d.map(r=>+r.fundingTime))-1;await sleep(80);}
+  const k=await J(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=1H&limit=300`);
+  const candles=k.data.map(r=>[+r[0],+r[4]]).reverse();
+  return {funding:fund.sort((a,b)=>a[0]-b[0]),candles};
+}
+async function hyperliquid(){
+  const post=b=>fetch("https://api.hyperliquid.xyz/info",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();});
+  const start=Date.now()-90*864e5;
+  const fh=await post({type:"fundingHistory",coin:"BTC",startTime:start});
+  const funding=fh.map(x=>[+x.time,+x.fundingRate]).sort((a,b)=>a[0]-b[0]);
+  const cs=await post({type:"candleSnapshot",req:{coin:"BTC",interval:"1h",startTime:Date.now()-15*864e5,endTime:Date.now()}});
+  const candles=cs.map(x=>[+x.t,+x.c]).sort((a,b)=>a[0]-b[0]);
+  return {funding,candles};
+}
+async function binance(){
+  let end=Date.now(),fund=[];
+  for(let p=0;p<3;p++){const a=await J(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1000&endTime=${end}`);if(!a.length)break;for(const r of a)fund.push([+r.fundingTime,+r.fundingRate]);end=Math.min(...a.map(r=>+r.fundingTime))-1;await sleep(80);}
+  const k=await J(`https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=1h&limit=300`);
+  const candles=k.map(r=>[+r[0],+r[4]]);
+  return {funding:fund.sort((a,b)=>a[0]-b[0]),candles};
+}
+async function getData(src){
+  const order=src==="auto"?[["okx",okx],["hyperliquid",hyperliquid],["binance",binance]]:[[src,{okx,hyperliquid,binance}[src]]];
+  let last;for(const [name,fn] of order){try{const d=await fn();if(d.funding.length>30)return {name,...d};}catch(e){last=e;}}
+  throw last||new Error("no source");
+}
+
+const $=id=>document.getElementById(id);
+const fPct=v=>(v>0?"+":"")+(v*100).toFixed(4)+"%";
+const fH=ms=>{const h=ms/3600000;return h<1?Math.round(h*60)+"m":h.toFixed(1)+"h";};
+const priceAt=(candles,t)=>{let best=candles[0];for(const c of candles){if(c[0]<=t)best=c;else break;}return best[1];};
+
+function render(d){
+  const fr=d.funding,rates=fr.map(x=>x[1]),s=[...rates].sort((a,b)=>a-b);
+  const thr=pct(s,0.05),now=Date.now();
+  const st=signalState(fr,thr,now);
+  const price=d.candles.length?d.candles[d.candles.length-1][1]:null;
+
+  $("curf").textContent=fPct(st.cur);$("curf").className="v "+(st.cur<=thr?"pos":st.cur>pct(s,0.95)?"neg":"neu");
+  $("thr").textContent=fPct(thr);
+  $("px").textContent=price?("$"+Math.round(price).toLocaleString()):"—";
+  const rk=rank(s,st.cur);$("ranklab").textContent=`${(rk*100).toFixed(0)}th pct`;
+
+  // gauge marks (map percentile rank to 0-100%)
+  $("gnow").style.left=(rk*100)+"%";$("gthr").style.left="5%";
+
+  const tradeEl=$("trade");
+  window.__sigstate=st.state; window.__openmove=0;
+  if(st.state==="IN_TRADE"){
+    $("sig").className="signal in";$("sig").textContent="IN TRADE · LONG";
+    $("dot").style.background="var(--long)";$("dot").style.boxShadow="0 0 12px var(--long)";
+    const entry=priceAt(d.candles,st.trig),move=price?(price-entry)/entry:0;
+    window.__openmove=move;
+    $("detail").innerHTML=`Entered ~<b>${fH(st.heldMs)}</b> ago near <b>$${Math.round(entry).toLocaleString()}</b>. Hold to <b>${HOLD_H}h</b>, then exit.`;
+    tradeEl.style.display="flex";
+    $("held").textContent=fH(st.heldMs);
+    $("left").textContent=fH(st.leftMs);
+    $("pnl").textContent=fPct(move);$("pnl").className="v "+(move>0?"pos":move<0?"neg":"neu");
+  }else if(st.state==="LONG_SETUP"){
+    $("sig").className="signal go";$("sig").textContent="LONG SETUP NOW";
+    $("dot").style.background="var(--long)";$("dot").style.boxShadow="0 0 12px var(--long)";
+    $("detail").innerHTML=`Funding is in the bottom 5% — crowded shorts. <b>Enter long, hold ${HOLD_H}h.</b>`;
+    tradeEl.style.display="none";
+  }else{
+    $("sig").className="signal wait";$("sig").textContent="WAIT";
+    $("dot").style.background="var(--wait)";$("dot").style.boxShadow="0 0 12px var(--wait)";
+    $("detail").innerHTML=`Funding is normal (not crowded short). No setup. Threshold to trigger: <b>${fPct(thr)}</b>.`;
+    tradeEl.style.display="none";
+  }
+
+  // histogram
+  const mn=Math.min(...rates),mx=Math.max(...rates),BN=44,w=(mx-mn)/BN||1,h=new Array(BN).fill(0);
+  for(const v of rates){let b=Math.floor((v-mn)/w);b=Math.max(0,Math.min(BN-1,b));h[b]++;}
+  const mxc=Math.max(...h),W=460,H=96,bw=W/BN;let svg="";
+  h.forEach((cnt,i)=>{const bx=mn+i*w,col=bx<=thr?"#1fe39a":bx>=pct(s,0.95)?"#ff4d63":"#3a4654",bh=cnt/mxc*(H-14);
+    svg+=`<rect x="${i*bw}" y="${H-bh}" width="${bw-1}" height="${bh}" fill="${col}" opacity=".85"/>`;});
+  const xt=(thr-mn)/(mx-mn)*W,xc=(st.cur-mn)/(mx-mn)*W;
+  svg+=`<line x1="${xt}" y1="0" x2="${xt}" y2="${H}" stroke="#1fe39a" stroke-dasharray="3 3"/>`;
+  svg+=`<line x1="${Math.max(0,Math.min(W,xc))}" y1="0" x2="${Math.max(0,Math.min(W,xc))}" y2="${H}" stroke="#fff" stroke-width="1.5"/>`;
+  $("hist").innerHTML=svg;
+
+  // expose funding+threshold so the interactive price chart can shade long setups
+  window.__fr=fr; window.__thr=thr;
+  if (typeof pxSeries !== "undefined" && pxSeries.length) pxDraw();
+
+  $("rule").innerHTML=`<b>The rule:</b> when funding drops to its bottom 5% (≤ <b>${fPct(thr)}</b>), go <b>long</b> and hold <b>${HOLD_H}h</b>, size 1–2x. Backtest 2024–26: ~+40% at 1x with only −9% max drawdown, 0 liquidations. Source: ${d.name} · ${rates.length} funding prints.`;
+  $("upd").textContent=`updated ${new Date().toLocaleTimeString()} · auto-refresh ${REFRESH_MS/1000}s`;
+  window.__price = price;
+}
+
+// ---- paper portfolio: a core BTC hold + a strategy cash reserve ----
+const PAPER_REPO   = "pi3rsmcgowin-code/btc-watcher";  // change if your repo differs
+const CORE_BTC     = 0.5;       // BTC you simply hold (long-term core)
+const STRATEGY_USD = 65000;     // cash the strategy trades (cash when flat, BTC when in a trade)
+function parseCSV(text){
+  const lines=text.trim().split(/\r?\n/); if(lines.length<2)return [];
+  const head=lines[0].split(","); return lines.slice(1).map(l=>{const c=l.split(","),o={};head.forEach((h,i)=>o[h]=c[i]);return o;});
+}
+async function renderPaper(){
+  let rows=[];
+  try{ const r=await fetch(`https://raw.githubusercontent.com/${PAPER_REPO}/main/paper_trades.csv?t=${Date.now()}`,{cache:"no-store"});
+       if(r.ok) rows=parseCSV(await r.text()); }catch(e){}
+  const n=rows.length, wins=rows.filter(t=>+t.net_pct>0).length;
+  const closedEq = n ? +rows[n-1].equity : 1;          // compounded realized return of the strategy
+  const price = window.__price;
+  const inTrade = window.__sigstate==="IN_TRADE";
+  const openMove = inTrade ? (window.__openmove||0) : 0;
+
+  const stratVal = STRATEGY_USD * closedEq * (1+openMove);   // cash value, or live value if deployed
+  const coreVal  = price ? CORE_BTC*price : 0;
+  const total    = coreVal + stratVal;
+  const stratRet = (closedEq-1)*100;
+
+  $("pstatus").textContent = n ? `${n} trades` : "0 trades";
+  $("p_start").textContent = `core ${CORE_BTC} BTC + $${STRATEGY_USD.toLocaleString()}`;
+  $("p_val").textContent = "$"+Math.round(total).toLocaleString();
+  $("p_val").className = "v neu";
+  $("p_ret").textContent = (stratRet>=0?"+":"")+stratRet.toFixed(1)+"%";
+  $("p_ret").className = "v "+(stratRet>0?"pos":stratRet<0?"neg":"neu");
+  $("p_wr").textContent = n ? Math.round(wins/n*100)+"%" : "—";
+
+  // holdings breakdown — shows "holding some + cash waiting"
+  const stratLine = inTrade
+    ? `<span style="color:var(--long)">deployed ≈${(stratVal/price).toFixed(3)} BTC</span> (open ${openMove>=0?"+":""}${(openMove*100).toFixed(2)}%)`
+    : `<span style="color:var(--txt)">$${Math.round(stratVal).toLocaleString()} cash</span>, waiting to buy`;
+  $("phold").innerHTML =
+    `<div>🪙 Core hold: <b style="color:var(--txt)">${CORE_BTC} BTC</b> · $${Math.round(coreVal).toLocaleString()}</div>`+
+    `<div>⚡ Strategy: ${stratLine}</div>`+
+    `<div style="color:var(--mut2);font-size:11.5px;margin-top:2px">RETURN box = strategy only (the part we're testing); VALUE = whole portfolio.</div>`;
+
+  if(n && price){ const bh=STRATEGY_USD*(price/(+rows[0].entry_px)); $("p_bh").textContent=`strat vs BTC-hold $${Math.round(bh).toLocaleString()}`; }
+  else $("p_bh").textContent="";
+
+  // strategy $ equity sparkline (flat at start when no trades)
+  const series=[STRATEGY_USD, ...rows.map(t=>+t.equity*STRATEGY_USD)];
+  const W=460,H=70,mn=Math.min(...series),mx=Math.max(...series),Y=v=>H-((v-mn)/((mx-mn)||1))*(H-8)-4;
+  $("peq").innerHTML = series.length>1
+    ? `<polyline points="${series.map((v,i)=>`${i/(series.length-1)*W},${Y(v)}`).join(" ")}" fill="none" stroke="#1fe39a" stroke-width="1.6"/>`+
+      `<line x1="0" y1="${Y(STRATEGY_USD)}" x2="${W}" y2="${Y(STRATEGY_USD)}" stroke="#566472" stroke-dasharray="3 3"/>`
+    : `<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#566472" stroke-width="1.4" stroke-dasharray="4 4"/>`;
+
+  $("ptrades").innerHTML = n ? rows.slice(-4).reverse().map(t=>{
+    const c=+t.net_pct>=0?"var(--long)":"var(--short)";
+    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--bord)">`+
+      `<span>${t.exit} · ${t.held_h}h</span><span style="color:${c}">${(+t.net_pct>=0?"+":"")+t.net_pct}%</span></div>`;}).join("") : "";
+  $("pmsg").style.display="none";
+}
+
+// ---- interactive BTC price chart (tabs + hover crosshair) ----
+const PX_RANGES={ "1D":["15m",96], "5D":["1H",120], "1M":["4H",180], "1Y":["1D",365], "3Y":["1D",1095], "ALL":["1D",1600] };
+let pxRange="1M", pxSeries=[], pxBase="", pxLo=0, pxHi=1, pxYf=v=>v;
+const pxCache={};
+async function okxCandles(bar, need){
+  let j=await J(`https://www.okx.com/api/v5/market/candles?instId=BTC-USDT-SWAP&bar=${bar}&limit=300`);
+  let rows=(j.data||[]).map(r=>[+r[0],+r[4]]);                 // newest-first
+  let guard=0;
+  while(rows.length<need && guard++<30){
+    const oldest=rows[rows.length-1][0];
+    const h=await J(`https://www.okx.com/api/v5/market/history-candles?instId=BTC-USDT-SWAP&bar=${bar}&after=${oldest}&limit=100`);
+    const d=h.data||[]; if(!d.length)break;
+    rows=rows.concat(d.map(r=>[+r[0],+r[4]])); await sleep(60);
+  }
+  return rows.reverse().slice(-need);                          // ascending, trimmed
+}
+function fmtDate(ts, range){
+  const d=new Date(ts), intr=(range==="1D"||range==="5D");
+  return intr ? d.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})
+              : d.toLocaleDateString([], {year:"numeric",month:"short",day:"numeric"});
+}
+function pxDraw(){
+  const s=pxSeries; if(!s||s.length<2) return;
+  const W=460,H=150,top=8,bot=16, px=s.map(p=>p[1]);
+  const lo=Math.min(...px),hi=Math.max(...px),rng=(hi-lo)||1; pxLo=lo; pxHi=hi;
+  const X=i=>i/(s.length-1)*W; pxYf=v=>top+(1-(v-lo)/rng)*(H-top-bot);
+  let bands=""; const fr=window.__fr,thr=window.__thr, short=["1D","5D","1M"].includes(pxRange);
+  if(short && fr && fr.length && thr!=null){
+    const bw=W/s.length, fstart=fr[0][0]; let k=0;
+    for(let i=0;i<s.length;i++){ const t=s[i][0]; if(t<fstart) continue;
+      while(k+1<fr.length && fr[k+1][0]<=t) k++;
+      if(fr[k][1]<=thr) bands+=`<rect x="${X(i)}" y="0" width="${bw+0.6}" height="${H}" fill="#1fe39a" opacity="0.13"/>`; }
+    $("pxsetuplabel").style.display="";
+  } else $("pxsetuplabel").style.display="none";
+  const line=s.map((p,i)=>`${X(i)},${pxYf(p[1])}`).join(" ");
+  pxBase=bands+`<polyline points="${line}" fill="none" stroke="#e9eef6" stroke-width="1.3"/>`+
+    `<circle cx="${X(s.length-1)}" cy="${pxYf(px[px.length-1])}" r="2.6" fill="#1fe39a"/>`;
+  $("pxchart").innerHTML=pxBase;
+  $("pxlo").textContent="$"+Math.round(lo).toLocaleString();
+  $("pxhi").textContent="$"+Math.round(hi).toLocaleString();
+  const chg=(px[px.length-1]/px[0]-1)*100, el=$("pxchg");
+  el.textContent=(chg>=0?"+":"")+chg.toFixed(1)+"% · "+pxRange; el.style.color=chg>=0?"var(--long)":"var(--short)";
+}
+async function pxLoad(range){
+  if(pxCache[range] && Date.now()-pxCache[range].t < 300000){ pxSeries=pxCache[range].s; pxDraw(); return; }
+  $("pxchg").textContent="loading…";
+  try{
+    const [bar,need]=PX_RANGES[range]; let s=await okxCandles(bar,need);
+    if(s.length>600){ const st=Math.ceil(s.length/600); s=s.filter((_,i)=>i%st===0); }
+    pxCache[range]={s,t:Date.now()}; pxSeries=s; pxDraw();
+  }catch(e){ $("pxchart").innerHTML=`<text x="8" y="20" fill="#ff4d63" font-size="11" font-family="monospace">price load error (${e.message})</text>`; $("pxchg").textContent="—"; }
+}
+function pxMove(clientX){
+  const svg=$("pxchart"); if(!pxSeries.length) return;
+  const rect=svg.getBoundingClientRect(); let frac=(clientX-rect.left)/rect.width; frac=Math.max(0,Math.min(1,frac));
+  const idx=Math.round(frac*(pxSeries.length-1)), [ts,price]=pxSeries[idx];
+  const x=idx/(pxSeries.length-1)*460, y=pxYf(price);
+  svg.innerHTML=pxBase+`<line x1="${x}" y1="0" x2="${x}" y2="150" stroke="#fff" stroke-opacity="0.35"/><circle cx="${x}" cy="${y}" r="3.4" fill="#fff"/>`;
+  const tip=$("pxtip"); tip.style.display="block"; tip.style.left=(frac*rect.width)+"px"; tip.style.top=((y/150)*rect.height)+"px";
+  tip.innerHTML=`$${Math.round(price).toLocaleString()}<br><span style="color:var(--mut)">${fmtDate(ts,pxRange)}</span>`;
+}
+function pxHide(){ $("pxchart").innerHTML=pxBase; $("pxtip").style.display="none"; }
+function pxInit(){
+  document.querySelectorAll("#pxtabs button").forEach(b=>b.addEventListener("click",()=>{
+    document.querySelectorAll("#pxtabs button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); pxRange=b.dataset.r; pxLoad(pxRange);
+  }));
+  const svg=$("pxchart");
+  svg.addEventListener("mousemove",e=>pxMove(e.clientX));
+  svg.addEventListener("mouseleave",pxHide);
+  svg.addEventListener("touchmove",e=>{ if(e.touches[0]) pxMove(e.touches[0].clientX); },{passive:true});
+  svg.addEventListener("touchend",pxHide);
+  pxLoad(pxRange);
+}
+
+async function run(){
+  try{$("err").style.display="none";render(await getData($("src").value));}
+  catch(e){$("err").style.display="block";$("err").textContent=`feed error (${e.message}). switch source top-right, or enable a VPN for binance.`;}
+  renderPaper();
+}
+let t;function start(){clearInterval(t);run();t=setInterval(run,REFRESH_MS);}
+$("src").addEventListener("change",start);
+$("helptoggle").addEventListener("click",()=>{const b=$("helpbody"),open=b.style.display!=="none";b.style.display=open?"none":"block";$("helpchev").textContent=open?"▸":"▾";});
+pxInit();
+start();
+</script>
+</body>
+</html>
