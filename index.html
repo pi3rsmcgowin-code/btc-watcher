@@ -122,6 +122,11 @@
     <div id="pmsg" class="sub" style="margin-top:10px;display:none"></div>
   </div>
 
+  <div class="card">
+    <div class="eyebrow" id="thtoggle" style="cursor:pointer;user-select:none"><span>📒 TRADE HISTORY <span id="thcount" style="color:var(--mut2)"></span></span><span id="thchev">▸</span></div>
+    <div id="thbody" style="display:none;margin-top:12px"></div>
+  </div>
+
   <div class="rule" id="rule"></div>
 
   <div class="card">
@@ -309,6 +314,7 @@ async function renderPaper(){
   updatePortfolioValue(window.__price);   // VALUE + holdings (also runs on the fast price tick)
 
   window.__paperRows = rows;
+  renderHistory(rows);
   if (typeof pvLoad === "function") pvLoad();
 
   $("ptrades").innerHTML = n ? rows.slice(-4).reverse().map(t=>{
@@ -398,6 +404,27 @@ async function run(){
   catch(e){$("err").style.display="block";$("err").textContent=`feed error (${e.message}). switch source top-right, or enable a VPN for binance.`;}
   renderPaper();
 }
+// ---- full trade history (entry/exit dates & times in your local timezone) ----
+function fmtLocal(s){ const ms=Date.parse(String(s).replace(" ","T")+"Z"); if(isNaN(ms))return s;
+  return new Date(ms).toLocaleString([], {month:"short",day:"numeric",year:"numeric",hour:"2-digit",minute:"2-digit"}); }
+function renderHistory(rows){
+  $("thcount").textContent = rows.length ? `· ${rows.length}` : "";
+  if(!rows.length){ $("thbody").innerHTML = `<div style="color:var(--mut2);font-size:13px">No trades yet. Closed trades will appear here with entry/exit dates and times.</div>`; return; }
+  $("thbody").innerHTML = rows.slice().reverse().map((t,i)=>{
+    const num=rows.length-i, pos=+t.net_pct>=0, col=pos?"var(--long)":"var(--short)";
+    return `<div style="padding:11px 0;border-bottom:1px solid var(--bord)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-family:var(--mono);font-size:12px;color:var(--mut)">#${num} · LONG · ${t.held_h}h</span>
+        <span style="font-family:var(--mono);font-size:14px;font-weight:700;color:${col}">${pos?"+":""}${t.net_pct}%</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--txt);margin-top:4px;line-height:1.5">
+        <span style="color:var(--mut2)">in &nbsp;</span>${fmtLocal(t.entry)} &nbsp;·&nbsp; $${(+t.entry_px).toLocaleString()}<br>
+        <span style="color:var(--mut2)">out</span> ${fmtLocal(t.exit)} &nbsp;·&nbsp; $${(+t.exit_px).toLocaleString()}
+      </div>
+    </div>`;
+  }).join("") + `<div style="font-size:11px;color:var(--mut2);margin-top:10px">Times shown in your local timezone. Net % includes funding carry − 0.07% cost.</div>`;
+}
+
 // ---- portfolio value chart: measures YOUR portfolio from INCEPTION (not BTC's full history) ----
 // value(t) = core BTC hold * price(t) + strategy reserve * equity(t), only for t >= INCEPTION.
 // Tabs pick a %-change lookback; any window longer than the account's age shows N/A.
@@ -471,6 +498,7 @@ async function tickPrice(){
 let t,tp;function start(){clearInterval(t);clearInterval(tp);run();tickPrice();t=setInterval(run,REFRESH_MS);tp=setInterval(tickPrice,PRICE_MS);}
 $("src").addEventListener("change",start);
 $("helptoggle").addEventListener("click",()=>{const b=$("helpbody"),open=b.style.display!=="none";b.style.display=open?"none":"block";$("helpchev").textContent=open?"▸":"▾";});
+$("thtoggle").addEventListener("click",()=>{const b=$("thbody"),open=b.style.display!=="none";b.style.display=open?"none":"block";$("thchev").textContent=open?"▸":"▾";});
 pxInit();
 pvInit();
 start();
