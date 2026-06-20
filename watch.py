@@ -1,10 +1,11 @@
-# BTC funding-reversion -> entry email, AI+market-state exit email, and PAPER-TRADE log.
-# Runs on GitHub Actions. Pure stdlib. Paper ledger + log files committed to the repo.
+# BTC funding-reversion -> entry email, AI+market-state exit email, paper-trade log,
+# and (optional) Buttondown broadcast to your subscribers. Runs on GitHub Actions. Pure stdlib.
 import os, json, time, ssl, smtplib, urllib.request
 from email.message import EmailMessage
  
 THR_Q, STATE, COST = 0.05, "state.json", 0.0007
 MIN_H, DEFAULT_H, HARD_MAX_H = 8, 40, 60
+DISCLAIMER = "\n\n— — —\nExperimental & paper-tested signal. NOT financial advice. Do your own research; you trade at your own risk."
  
 def http_json(url, data=None, headers=None):
     req = urllib.request.Request(url, data=data, headers=headers or {"User-Agent": "btc-watcher"})
@@ -54,6 +55,18 @@ def send_email(subject, body):
     with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as s:
         s.starttls(context=ssl.create_default_context()); s.login(cfg["from"], cfg["pw"]); s.send_message(m)
  
+def broadcast(subject, body):
+    """Send to all Buttondown subscribers (optional; skipped if no key set)."""
+    key = os.getenv("BUTTONDOWN_API_KEY")
+    if not key: return
+    data = json.dumps({"subject": subject, "body": body + DISCLAIMER, "status": "about_to_send"}).encode()
+    try:
+        r = http_json("https://api.buttondown.email/v1/emails", data=data,
+                      headers={"Authorization": "Token " + key, "Content-Type": "application/json"})
+        print("broadcast queued:", r.get("id", "ok"))
+    except Exception as e:
+        print("broadcast failed:", str(e)[:180])
+ 
 def ai_call(ctx, key):
     body = json.dumps({
         "model": "claude-haiku-4-5-20251001", "max_tokens": 120,
@@ -81,7 +94,7 @@ def decide_exit(held_h, ai_thunk):
     return ("EXIT", f"{DEFAULT_H}h tested hold complete") if held_h >= DEFAULT_H else ("HOLD", "<40h")
  
 def carry_between(fund, t0, t1):
-    return -sum(rate for ts, rate in fund if t0 <= ts < t1)   # long collects negative funding
+    return -sum(rate for ts, rate in fund if t0 <= ts < t1)
  
 def apply_paper_exit(paper, tr, exit_px, exit_ts, fund):
     pr = exit_px / tr["entry_price"] - 1
@@ -97,30 +110,27 @@ def apply_paper_exit(paper, tr, exit_px, exit_ts, fund):
     paper["trades"].append(rec); return rec
  
 def summary_line(paper, price):
-    n, eq = paper["n"], paper["equity"]
-    wr = (paper["wins"] / n * 100) if n else 0
+    n, eq = paper["n"], paper["equity"]; wr = (paper["wins"] / n * 100) if n else 0
     bh = (price / paper["first_price"] - 1) * 100 if paper.get("first_price") else 0
-    return (f"PAPER (1x): {n} trades, {wr:.0f}% win, total {(eq-1)*100:+.1f}%  "
-            f"| BTC buy&hold since start {bh:+.1f}%")
+    return f"PAPER (1x): {n} trades, {wr:.0f}% win, total {(eq-1)*100:+.1f}% | BTC buy&hold since start {bh:+.1f}%"
  
 def write_paper_files(paper, price):
     csv = "entry,exit,held_h,entry_px,exit_px,price_pct,carry_pct,net_pct,equity\n" + "\n".join(
         f"{t['entry']},{t['exit']},{t['held_h']},{t['entry_px']},{t['exit_px']},{t['price_pct']},{t['carry_pct']},{t['net_pct']},{t['equity']}"
         for t in paper["trades"])
     open("paper_trades.csv", "w").write(csv + "\n")
-    rows = paper["trades"][-30:]
     md = ["# Paper-trading record (1x, fee+carry modeled)", "", f"_{summary_line(paper, price)}_", "",
           "| entry (UTC) | exit | held h | entry $ | exit $ | price % | carry % | net % | equity x |",
           "|---|---|---|---|---|---|---|---|---|"]
-    for t in rows:
+    for t in paper["trades"][-30:]:
         md.append(f"| {t['entry']} | {t['exit']} | {t['held_h']} | {t['entry_px']:,} | {t['exit_px']:,} | "
                   f"{t['price_pct']:+} | {t['carry_pct']:+} | {t['net_pct']:+} | {t['equity']} |")
-    md += ["", "_Net % = price move + funding carry − 0.07% cost. This is the deployed (AI-exit) logic, paper only._"]
+    md += ["", "_Net % = price move + funding carry − 0.07% cost. Deployed (AI-exit) logic, paper only. Not financial advice._"]
     open("paper_log.md", "w").write("\n".join(md) + "\n")
  
 def main():
     if os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch":
-        try: send_email("BTC watcher: live", "Cloud watcher running: entry + AI-exit alerts + paper-trade log active.")
+        try: send_email("BTC watcher: live", "Cloud watcher running: entry + AI-exit alerts + paper log + subscriber broadcasts active.")
         except Exception as e: print("confirmation email FAILED:", e)
  
     fund = get_funding()
@@ -142,13 +152,16 @@ def main():
     if is_long and state.get("last") != "LONG" and trade is None:
         if paper["first_price"] is None: paper["first_price"], paper["first_ts"] = price, now
         body = (f"BTC LONG entry.\nFunding {cur*100:+.4f}% <= 5th-pct {thr*100:+.4f}% (crowded shorts). Entry ~${price:,.0f}. "
-                f"Size 1-2x. Exit email comes from AI+market state (fallback 40h).\n\n{summary_line(paper, price)}")
+                f"Rule: go LONG, size 1-2x. Exit alert comes when AI + market state say so (fallback 40h).\n\n{summary_line(paper, price)}")
         try: send_email("BTC LONG entry (funding bottom 5%)", body); print("ENTRY email sent")
         except Exception as e: print("entry email FAILED:", e)
+        broadcast("BTC: LONG setup now",
+                  f"Bitcoin funding just dropped into its bottom 5% (crowded shorts) at ~${price:,.0f} — the historical long-setup signal. "
+                  f"The plan is a long held ~40h, then exit. A follow-up email will say when to close.")
         trade = {"entry_ts": now, "entry_price": price}
     state["last"] = "LONG" if is_long else "OTHER"
  
-    # EXIT (AI + guardrails) + paper bookkeeping
+    # EXIT (AI + guardrails) + paper bookkeeping + broadcast
     if trade:
         held_h = (now - trade["entry_ts"]) / 3600000.0
         pnl = (price - trade["entry_price"]) / trade["entry_price"]
@@ -164,9 +177,12 @@ def main():
         if action == "EXIT":
             rec = apply_paper_exit(paper, trade, price, now, fund)
             body = (f"EXIT BTC long.\nReason: {reason}. Held {rec['held_h']}h, entry ${rec['entry_px']:,}, now ${rec['exit_px']:,}, "
-                    f"net {rec['net_pct']:+}% (incl carry/cost).\n\n{summary_line(paper, price)}\n\nSee paper_log.md in your repo for the full record.")
+                    f"net {rec['net_pct']:+}% (incl carry/cost).\n\n{summary_line(paper, price)}\n\nSee paper_log.md in your repo.")
             try: send_email("BTC EXIT long now", body); print("EXIT email sent")
             except Exception as e: print("exit email FAILED:", e)
+            broadcast("BTC: close the long",
+                      f"Time to close the Bitcoin long from the last alert. Now ~${price:,.0f}; this trade's paper result {rec['net_pct']:+}% "
+                      f"(price move + funding − costs). Running paper record: {summary_line(paper, price)}.")
             trade = None
  
     state["trade"] = trade; state["paper"] = paper
@@ -175,3 +191,4 @@ def main():
  
 if __name__ == "__main__":
     main()
+ 
