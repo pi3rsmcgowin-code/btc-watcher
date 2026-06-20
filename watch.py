@@ -1,11 +1,19 @@
-# BTC funding-reversion -> entry email, AI+market-state exit email, paper-trade log,
-# and (optional) Buttondown broadcast to your subscribers. Runs on GitHub Actions. Pure stdlib.
+# BTC funding-reversion watcher: entry alert, exit (AI-assisted or pure 40h), paper log,
+# optional "still waiting" heartbeat, and optional Buttondown broadcast. GitHub Actions, pure stdlib.
 import os, json, time, ssl, smtplib, urllib.request
 from email.message import EmailMessage
  
-THR_Q, STATE, COST = 0.05, "state.json", 0.0007
+THR_Q, COST = 0.05, 0.0007
 MIN_H, DEFAULT_H, HARD_MAX_H = 8, 40, 60
+STATE = "state.json"
 DISCLAIMER = "\n\n— — —\nExperimental & paper-tested signal. NOT financial advice. Do your own research; you trade at your own risk."
+ 
+# ---- SWITCHES (set as repo Variables: Settings > Secrets and variables > Actions > Variables) ----
+# USE_AI_EXIT = "false" -> ignore AI, exit on the tested 40h rule. unset/"true" -> AI-assisted (8-60h).
+USE_AI_EXIT = (os.getenv("USE_AI_EXIT") or "true").strip().lower() not in ("false", "0", "no", "off")
+# HEARTBEAT_HOURS: send a "still watching, no setup" email this often while waiting. "0" disables.
+try: HEARTBEAT_HOURS = float(os.getenv("HEARTBEAT_HOURS") or "168")   # default weekly
+except ValueError: HEARTBEAT_HOURS = 168.0
  
 def http_json(url, data=None, headers=None):
     req = urllib.request.Request(url, data=data, headers=headers or {"User-Agent": "btc-watcher"})
@@ -56,7 +64,6 @@ def send_email(subject, body):
         s.starttls(context=ssl.create_default_context()); s.login(cfg["from"], cfg["pw"]); s.send_message(m)
  
 def broadcast(subject, body):
-    """Send to all Buttondown subscribers (optional; skipped if no key set)."""
     key = os.getenv("BUTTONDOWN_API_KEY")
     if not key: return
     data = json.dumps({"subject": subject, "body": body + DISCLAIMER, "status": "about_to_send"}).encode()
@@ -125,12 +132,13 @@ def write_paper_files(paper, price):
     for t in paper["trades"][-30:]:
         md.append(f"| {t['entry']} | {t['exit']} | {t['held_h']} | {t['entry_px']:,} | {t['exit_px']:,} | "
                   f"{t['price_pct']:+} | {t['carry_pct']:+} | {t['net_pct']:+} | {t['equity']} |")
-    md += ["", "_Net % = price move + funding carry − 0.07% cost. Deployed (AI-exit) logic, paper only. Not financial advice._"]
+    md += ["", "_Net % = price move + funding carry − 0.07% cost. Paper only. Not financial advice._"]
     open("paper_log.md", "w").write("\n".join(md) + "\n")
  
 def main():
+    print(f"mode: AI-exit {'ON (8-60h)' if USE_AI_EXIT else 'OFF (pure 40h)'} | heartbeat {HEARTBEAT_HOURS}h")
     if os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch":
-        try: send_email("BTC watcher: live", "Cloud watcher running: entry + AI-exit alerts + paper log + subscriber broadcasts active.")
+        try: send_email("BTC watcher: live", f"Cloud watcher running. AI-exit {'on' if USE_AI_EXIT else 'off'}. Entry+exit alerts, paper log, broadcasts active.")
         except Exception as e: print("confirmation email FAILED:", e)
  
     fund = get_funding()
@@ -141,7 +149,7 @@ def main():
     is_long = cur <= thr; now = int(time.time() * 1000)
     print(f"funding {cur*100:+.4f}%  thr {thr*100:+.4f}%  med {med*100:+.4f}%  -> {'LONG SETUP' if is_long else 'wait'}")
  
-    state = {"last": "OTHER", "trade": None, "paper": None}
+    state = {"last": "OTHER", "trade": None, "paper": None, "last_heartbeat": 0}
     if os.path.exists(STATE):
         try: state.update(json.load(open(STATE)))
         except Exception: pass
@@ -152,16 +160,16 @@ def main():
     if is_long and state.get("last") != "LONG" and trade is None:
         if paper["first_price"] is None: paper["first_price"], paper["first_ts"] = price, now
         body = (f"BTC LONG entry.\nFunding {cur*100:+.4f}% <= 5th-pct {thr*100:+.4f}% (crowded shorts). Entry ~${price:,.0f}. "
-                f"Rule: go LONG, size 1-2x. Exit alert comes when AI + market state say so (fallback 40h).\n\n{summary_line(paper, price)}")
+                f"Rule: go LONG 1-2x. Exit alert when {'AI + market state' if USE_AI_EXIT else 'the 40h rule'} says so.\n\n{summary_line(paper, price)}")
         try: send_email("BTC LONG entry (funding bottom 5%)", body); print("ENTRY email sent")
         except Exception as e: print("entry email FAILED:", e)
         broadcast("BTC: LONG setup now",
                   f"Bitcoin funding just dropped into its bottom 5% (crowded shorts) at ~${price:,.0f} — the historical long-setup signal. "
-                  f"The plan is a long held ~40h, then exit. A follow-up email will say when to close.")
+                  f"Plan: long held up to ~40h, then exit. A follow-up email will say when to close.")
         trade = {"entry_ts": now, "entry_price": price}
     state["last"] = "LONG" if is_long else "OTHER"
  
-    # EXIT (AI + guardrails) + paper bookkeeping + broadcast
+    # EXIT
     if trade:
         held_h = (now - trade["entry_ts"]) / 3600000.0
         pnl = (price - trade["entry_price"]) / trade["entry_price"]
@@ -171,7 +179,7 @@ def main():
                f"Funding {cur*100:+.4f}% (trigger {thr*100:+.4f}%, median {med*100:+.4f}%); "
                f"{'normalized: shorts unwound' if cur >= med else 'still below median: shorts crowded'}.\n"
                f"RSI(1h) {r:.0f}, last-6h {mom*100:+.2f}%. EXIT or HOLD?")
-        thunk = (lambda: ai_call(ctx, key)) if key else None
+        thunk = (lambda: ai_call(ctx, key)) if (key and USE_AI_EXIT) else None
         action, reason = decide_exit(held_h, thunk)
         print(f"  in trade {held_h:.1f}h pnl {pnl*100:+.2f}% -> {action} ({reason})")
         if action == "EXIT":
@@ -181,9 +189,19 @@ def main():
             try: send_email("BTC EXIT long now", body); print("EXIT email sent")
             except Exception as e: print("exit email FAILED:", e)
             broadcast("BTC: close the long",
-                      f"Time to close the Bitcoin long from the last alert. Now ~${price:,.0f}; this trade's paper result {rec['net_pct']:+}% "
-                      f"(price move + funding − costs). Running paper record: {summary_line(paper, price)}.")
+                      f"Time to close the Bitcoin long from the last alert. Now ~${price:,.0f}; this trade's paper result {rec['net_pct']:+}%. "
+                      f"Running paper record: {summary_line(paper, price)}.")
             trade = None
+ 
+    # HEARTBEAT — "still watching" while waiting (no trade), so silence never means "is it broken?"
+    if (trade is None and not is_long and HEARTBEAT_HOURS > 0
+            and now - state.get("last_heartbeat", 0) >= HEARTBEAT_HOURS * 3600000):
+        try:
+            send_email("BTC watcher: still watching (no setup)",
+                       f"All good — no setup right now.\nFunding {cur*100:+.4f}% (needs <= {thr*100:+.4f}% to trigger a long). "
+                       f"BTC ~${price:,.0f}.\n\n{summary_line(paper, price)}\n\nYou'll get an email the moment a setup appears.")
+            state["last_heartbeat"] = now; print("heartbeat email sent")
+        except Exception as e: print("heartbeat email FAILED:", e)
  
     state["trade"] = trade; state["paper"] = paper
     json.dump(state, open(STATE, "w"))
