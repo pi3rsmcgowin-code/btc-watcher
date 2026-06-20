@@ -288,13 +288,19 @@ function updatePortfolioValue(price){
   const openMove=(inTrade&&window.__entryPrice)?(price-window.__entryPrice)/window.__entryPrice:0;
   const stratVal=STRATEGY_USD*closedEq*(1+openMove), coreVal=CORE_BTC*price, total=coreVal+stratVal;
   $("p_val").textContent="$"+Math.round(total).toLocaleString(); $("p_val").className="v neu";
+  // RETURN = whole-portfolio change since you started (syncs with VALUE; matches chart "since start")
+  const base=window.__pvBaseValue;
+  const ret = base ? (total/base-1)*100 : 0;
+  $("p_ret").textContent = base ? (ret>=0?"+":"")+ret.toFixed(2)+"%" : "—";
+  $("p_ret").className = "v "+(ret>0?"pos":ret<0?"neg":"neu");
+  const stratRet=(closedEq-1)*100;
   const stratLine=inTrade
     ? `<span style="color:var(--long)">deployed ≈${(stratVal/price).toFixed(3)} BTC</span> (open ${openMove>=0?"+":""}${(openMove*100).toFixed(2)}%)`
     : `<span style="color:var(--txt)">$${Math.round(stratVal).toLocaleString()} cash</span>, waiting to buy`;
   $("phold").innerHTML=
     `<div>🪙 Core hold: <b style="color:var(--txt)">${CORE_BTC} BTC</b> · $${Math.round(coreVal).toLocaleString()}</div>`+
-    `<div>⚡ Strategy: ${stratLine}</div>`+
-    `<div style="color:var(--mut2);font-size:11.5px;margin-top:2px">RETURN box = strategy only; VALUE = whole portfolio.</div>`;
+    `<div>⚡ Strategy: ${stratLine} · realized <b style="color:${stratRet>0?'var(--long)':stratRet<0?'var(--short)':'var(--txt)'}">${stratRet>=0?"+":""}${stratRet.toFixed(1)}%</b></div>`+
+    `<div style="color:var(--mut2);font-size:11.5px;margin-top:2px">RETURN & VALUE = whole portfolio since you started. "realized" = the strategy's closed-trade return only.</div>`;
   $("p_bh").textContent = window.__firstPx ? `strat vs BTC-hold $${Math.round(STRATEGY_USD*(price/window.__firstPx)).toLocaleString()}` : "";
 }
 async function renderPaper(){
@@ -303,15 +309,12 @@ async function renderPaper(){
        if(r.ok) rows=parseCSV(await r.text()); }catch(e){}
   const n=rows.length, wins=rows.filter(t=>+t.net_pct>0).length;
   const closedEq = n ? +rows[n-1].equity : 1;
-  const stratRet = (closedEq-1)*100;
   window.__closedEq = closedEq; window.__firstPx = n ? +rows[0].entry_px : null;
 
   $("pstatus").textContent = n ? `${n} trades` : "0 trades";
   $("p_start").textContent = `core ${CORE_BTC} BTC + $${STRATEGY_USD.toLocaleString()}`;
-  $("p_ret").textContent = (stratRet>=0?"+":"")+stratRet.toFixed(1)+"%";
-  $("p_ret").className = "v "+(stratRet>0?"pos":stratRet<0?"neg":"neu");
   $("p_wr").textContent = n ? Math.round(wins/n*100)+"%" : "—";
-  updatePortfolioValue(window.__price);   // VALUE + holdings (also runs on the fast price tick)
+  updatePortfolioValue(window.__price);   // VALUE + RETURN + holdings (also runs on the fast price tick)
 
   window.__paperRows = rows;
   renderHistory(rows);
@@ -457,7 +460,9 @@ function pvDraw(){
   el.textContent=(chg>=0?"+":"")+chg.toFixed(2)+"% · "+(pvLookback==="ALL"?"since start":pvLookback);
   el.style.color=chg>=0?"var(--long)":"var(--short)";
 }
-function pvRender(){ const age=Date.now()-INCEPTION,[bar]=pvBarForAge(age),c=pvCache[bar]; if(!c)return; pvSeries=buildPV(c.candles, window.__paperRows||[]); pvDraw(); }
+function pvRender(){ const age=Date.now()-INCEPTION,[bar]=pvBarForAge(age),c=pvCache[bar]; if(!c)return; pvSeries=buildPV(c.candles, window.__paperRows||[]);
+  if(pvSeries.length) window.__pvBaseValue=pvSeries[0][1];
+  pvDraw(); if(window.__price) updatePortfolioValue(window.__price); }
 async function pvLoad(){
   const age=Date.now()-INCEPTION,[bar,barMs]=pvBarForAge(age);
   if(!(pvCache[bar] && Date.now()-pvCache[bar].t<60000)){
