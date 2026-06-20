@@ -143,7 +143,7 @@
 </div>
 
 <script>
-const HOLD_H=40, REFRESH_MS=60000;
+const HOLD_H=40, REFRESH_MS=30000, PRICE_MS=5000;
 const pct=(s,q)=>{if(!s.length)return NaN;const i=(s.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(i-lo);};
 const rank=(s,v)=>{let lo=0,hi=s.length;while(lo<hi){const m=(lo+hi)>>1;if(s[m]<v)lo=m+1;else hi=m;}return lo/s.length;};
 function signalState(history,thr,now){
@@ -211,12 +211,12 @@ function render(d){
   $("gnow").style.left=(rk*100)+"%";$("gthr").style.left="5%";
 
   const tradeEl=$("trade");
-  window.__sigstate=st.state; window.__openmove=0;
+  window.__sigstate=st.state; window.__entryPrice=null;
   if(st.state==="IN_TRADE"){
     $("sig").className="signal in";$("sig").textContent="IN TRADE · LONG";
     $("dot").style.background="var(--long)";$("dot").style.boxShadow="0 0 12px var(--long)";
     const entry=priceAt(d.candles,st.trig),move=price?(price-entry)/entry:0;
-    window.__openmove=move;
+    window.__entryPrice=entry;
     $("detail").innerHTML=`Entered ~<b>${fH(st.heldMs)}</b> ago near <b>$${Math.round(entry).toLocaleString()}</b>. Hold to <b>${HOLD_H}h</b>, then exit.`;
     tradeEl.style.display="flex";
     $("held").textContent=fH(st.heldMs);
@@ -262,40 +262,36 @@ function parseCSV(text){
   const lines=text.trim().split(/\r?\n/); if(lines.length<2)return [];
   const head=lines[0].split(","); return lines.slice(1).map(l=>{const c=l.split(","),o={};head.forEach((h,i)=>o[h]=c[i]);return o;});
 }
+function updatePortfolioValue(price){
+  if(!price) return;
+  const closedEq=window.__closedEq||1, inTrade=window.__sigstate==="IN_TRADE";
+  const openMove=(inTrade&&window.__entryPrice)?(price-window.__entryPrice)/window.__entryPrice:0;
+  const stratVal=STRATEGY_USD*closedEq*(1+openMove), coreVal=CORE_BTC*price, total=coreVal+stratVal;
+  $("p_val").textContent="$"+Math.round(total).toLocaleString(); $("p_val").className="v neu";
+  const stratLine=inTrade
+    ? `<span style="color:var(--long)">deployed ≈${(stratVal/price).toFixed(3)} BTC</span> (open ${openMove>=0?"+":""}${(openMove*100).toFixed(2)}%)`
+    : `<span style="color:var(--txt)">$${Math.round(stratVal).toLocaleString()} cash</span>, waiting to buy`;
+  $("phold").innerHTML=
+    `<div>🪙 Core hold: <b style="color:var(--txt)">${CORE_BTC} BTC</b> · $${Math.round(coreVal).toLocaleString()}</div>`+
+    `<div>⚡ Strategy: ${stratLine}</div>`+
+    `<div style="color:var(--mut2);font-size:11.5px;margin-top:2px">RETURN box = strategy only; VALUE = whole portfolio.</div>`;
+  $("p_bh").textContent = window.__firstPx ? `strat vs BTC-hold $${Math.round(STRATEGY_USD*(price/window.__firstPx)).toLocaleString()}` : "";
+}
 async function renderPaper(){
   let rows=[];
   try{ const r=await fetch(`https://raw.githubusercontent.com/${PAPER_REPO}/main/paper_trades.csv?t=${Date.now()}`,{cache:"no-store"});
        if(r.ok) rows=parseCSV(await r.text()); }catch(e){}
   const n=rows.length, wins=rows.filter(t=>+t.net_pct>0).length;
-  const closedEq = n ? +rows[n-1].equity : 1;          // compounded realized return of the strategy
-  const price = window.__price;
-  const inTrade = window.__sigstate==="IN_TRADE";
-  const openMove = inTrade ? (window.__openmove||0) : 0;
-
-  const stratVal = STRATEGY_USD * closedEq * (1+openMove);   // cash value, or live value if deployed
-  const coreVal  = price ? CORE_BTC*price : 0;
-  const total    = coreVal + stratVal;
+  const closedEq = n ? +rows[n-1].equity : 1;
   const stratRet = (closedEq-1)*100;
+  window.__closedEq = closedEq; window.__firstPx = n ? +rows[0].entry_px : null;
 
   $("pstatus").textContent = n ? `${n} trades` : "0 trades";
   $("p_start").textContent = `core ${CORE_BTC} BTC + $${STRATEGY_USD.toLocaleString()}`;
-  $("p_val").textContent = "$"+Math.round(total).toLocaleString();
-  $("p_val").className = "v neu";
   $("p_ret").textContent = (stratRet>=0?"+":"")+stratRet.toFixed(1)+"%";
   $("p_ret").className = "v "+(stratRet>0?"pos":stratRet<0?"neg":"neu");
   $("p_wr").textContent = n ? Math.round(wins/n*100)+"%" : "—";
-
-  // holdings breakdown — shows "holding some + cash waiting"
-  const stratLine = inTrade
-    ? `<span style="color:var(--long)">deployed ≈${(stratVal/price).toFixed(3)} BTC</span> (open ${openMove>=0?"+":""}${(openMove*100).toFixed(2)}%)`
-    : `<span style="color:var(--txt)">$${Math.round(stratVal).toLocaleString()} cash</span>, waiting to buy`;
-  $("phold").innerHTML =
-    `<div>🪙 Core hold: <b style="color:var(--txt)">${CORE_BTC} BTC</b> · $${Math.round(coreVal).toLocaleString()}</div>`+
-    `<div>⚡ Strategy: ${stratLine}</div>`+
-    `<div style="color:var(--mut2);font-size:11.5px;margin-top:2px">RETURN box = strategy only (the part we're testing); VALUE = whole portfolio.</div>`;
-
-  if(n && price){ const bh=STRATEGY_USD*(price/(+rows[0].entry_px)); $("p_bh").textContent=`strat vs BTC-hold $${Math.round(bh).toLocaleString()}`; }
-  else $("p_bh").textContent="";
+  updatePortfolioValue(window.__price);   // VALUE + holdings (also runs on the fast price tick)
 
   // strategy $ equity sparkline (flat at start when no trades)
   const series=[STRATEGY_USD, ...rows.map(t=>+t.equity*STRATEGY_USD)];
@@ -392,7 +388,14 @@ async function run(){
   catch(e){$("err").style.display="block";$("err").textContent=`feed error (${e.message}). switch source top-right, or enable a VPN for binance.`;}
   renderPaper();
 }
-let t;function start(){clearInterval(t);run();t=setInterval(run,REFRESH_MS);}
+function fetchLastPrice(){return J(`https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT-SWAP`).then(j=>+j.data[0].last).catch(()=>null);}
+async function tickPrice(){
+  const p=await fetchLastPrice(); if(!p) return;
+  window.__price=p; $("px").textContent="$"+Math.round(p).toLocaleString();
+  if(window.__sigstate==="IN_TRADE"&&window.__entryPrice){const mv=(p-window.__entryPrice)/window.__entryPrice;$("pnl").textContent=fPct(mv);$("pnl").className="v "+(mv>0?"pos":mv<0?"neg":"neu");}
+  updatePortfolioValue(p);
+}
+let t,tp;function start(){clearInterval(t);clearInterval(tp);run();tickPrice();t=setInterval(run,REFRESH_MS);tp=setInterval(tickPrice,PRICE_MS);}
 $("src").addEventListener("change",start);
 $("helptoggle").addEventListener("click",()=>{const b=$("helpbody"),open=b.style.display!=="none";b.style.display=open?"none":"block";$("helpchev").textContent=open?"▸":"▾";});
 pxInit();
