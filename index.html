@@ -134,6 +134,14 @@
         <li><b>WAIT</b> = no setup, stay flat. <b style="color:var(--long)">LONG SETUP</b> = funding hit the bottom 5%, enter long. <b>IN TRADE</b> = you're holding, with time held, exit countdown, live P&L.</li>
         <li>The <b>$ number</b> top-right is the current BTC price.</li>
       </ul>
+      <p style="margin-bottom:6px"><b style="color:var(--txt)">What to do in each state</b></p>
+      <ul style="margin:0 0 12px 18px;padding:0">
+        <li><b>WAIT</b> — do nothing. Cash stays in cash, core BTC just sits. You'll be here most of the time (days at a stretch). The watcher emails you when it changes, so you can ignore it.</li>
+        <li><b style="color:var(--long)">LONG SETUP NOW</b> — your cue to act: open a long near the shown price, <b>1x or 2x</b> (1x = no liquidation risk). This is when the entry email/broadcast fires.</li>
+        <li><b style="color:var(--long)">IN TRADE</b> — hold, hands off. Let the ~40h plan run; don't bail on a red number or grab profit early — the edge is in holding the full window.</li>
+        <li><b>Exit</b> (flips back to WAIT) — close the position when the exit alert lands; reserve goes back to cash. Then you're waiting again.</li>
+      </ul>
+      <p style="margin-bottom:12px;color:var(--mut2);font-size:12px">Rhythm: WAIT (nothing) → LONG SETUP (enter) → IN TRADE (hold) → exit (close) → WAIT. About 2 actions per cycle, roughly once every 2 weeks, clustered in volatile stretches (~25–30/yr). Funding only updates every 8h, so setups appear on that cadence. Right now it's all <b>paper</b> — you're learning the cadence, not moving real money.</p>
       <p style="margin-bottom:6px"><b style="color:var(--txt)">BTC PRICE card</b> — last ~12 days of price. <b style="color:var(--long)">Green bands</b> mark times funding was at/below the threshold (where the rule would go long).</p>
       <p style="margin:10px 0 6px"><b style="color:var(--txt)">FUNDING NOW vs HISTORY</b></p>
       <ul style="margin:0 0 12px 18px;padding:0">
