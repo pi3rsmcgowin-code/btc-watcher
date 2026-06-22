@@ -43,6 +43,7 @@
   .sub-form input{flex:1;background:var(--panel2);border:1px solid var(--bord);border-radius:9px;padding:10px 12px;color:var(--txt);font-family:var(--sans);font-size:13px;outline:none}
   .sub-form input:focus{border-color:var(--long)}
   .sub-form button{background:var(--long);color:#04140d;border:none;border-radius:9px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer}
+  .sub-btn{display:inline-block;background:var(--long);color:#04140d;text-decoration:none;border-radius:9px;padding:11px 22px;font-weight:700;font-size:13.5px;cursor:pointer}
   .rule{font-size:12.5px;color:var(--mut);line-height:1.6;margin-top:14px;padding-top:13px;border-top:1px solid var(--bord)}
   .rule b{color:var(--txt)}
   .upd{font-family:var(--mono);font-size:11px;color:var(--mut);text-align:center}
@@ -57,16 +58,17 @@
     <select class="src" id="src"><option value="auto">auto</option><option value="okx">okx</option><option value="hyperliquid">hyperliquid</option><option value="binance">binance</option></select>
   </div>
   <div class="err" id="err"></div>
-
+ 
   <div class="card" style="text-align:center">
     <div class="eyebrow" style="justify-content:center">📩 FREE EMAIL ALERTS</div>
     <div class="sub" style="margin:9px auto 13px;max-width:400px">Get an email when BTC funding flips to a long setup — and when to exit. Experimental, paper-tested, <b style="color:var(--txt)">not financial advice</b>.</div>
-    <form class="sub-form" action="https://buttondown.com/api/emails/embed-subscribe/btc664033" method="post" target="popupwindow" onsubmit="window.open('https://buttondown.com/btc664033','popupwindow')">
-      <input type="email" name="email" placeholder="you@email.com" required>
-      <button type="submit">Subscribe</button>
-    </form>
+    <div class="sub-form">
+      <input id="subemail" type="email" placeholder="you@email.com" required>
+      <button id="subbtn" type="button">Subscribe</button>
+    </div>
+    <div id="submsg" class="sub" style="margin-top:9px;font-size:12px;min-height:15px;color:var(--mut2)">Unsubscribe anytime by replying "stop" to an alert.</div>
   </div>
-
+ 
   <div class="card">
     <div class="eyebrow"><span>SIGNAL · THE PROVEN RULE</span><span id="px">—</span></div>
     <div class="signal wait" id="sig">loading…</div>
@@ -77,7 +79,7 @@
       <div class="stat"><div class="k">TRADE P&L</div><div class="v neu" id="pnl">—</div></div>
     </div>
   </div>
-
+ 
   <div class="card">
     <div class="eyebrow"><span>BTC PRICE</span><span id="pxchg">—</span></div>
     <div id="pxtabs" class="pxtabs">
@@ -89,7 +91,7 @@
     </div>
     <div class="glab"><span id="pxlo">—</span><span id="pxsetuplabel" style="color:var(--long)">▌ long setups</span><span id="pxhi">—</span></div>
   </div>
-
+ 
   <div class="card">
     <div class="eyebrow"><span>FUNDING NOW vs HISTORY</span><span id="ranklab">—</span></div>
     <div class="liverow">
@@ -100,7 +102,7 @@
     <div class="glab"><span>crowded short (long setup)</span><span>crowded long</span></div>
     <svg class="hist" id="hist" viewBox="0 0 460 96" preserveAspectRatio="none"></svg>
   </div>
-
+ 
   <div class="card">
     <div class="eyebrow"><span>PAPER PORTFOLIO · 1x</span><span id="pstatus">—</span></div>
     <div class="liverow">
@@ -121,14 +123,14 @@
     <div id="ptrades" style="margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--mut)"></div>
     <div id="pmsg" class="sub" style="margin-top:10px;display:none"></div>
   </div>
-
+ 
   <div class="card">
     <div class="eyebrow" id="thtoggle" style="cursor:pointer;user-select:none"><span>📒 TRADE HISTORY <span id="thcount" style="color:var(--mut2)"></span></span><span id="thchev">▸</span></div>
     <div id="thbody" style="display:none;margin-top:12px"></div>
   </div>
-
+ 
   <div class="rule" id="rule"></div>
-
+ 
   <div class="card">
     <div class="eyebrow" id="helptoggle" style="cursor:pointer;user-select:none"><span>❔ HELP — what do these mean?</span><span id="helpchev">▸</span></div>
     <div id="helpbody" style="display:none;margin-top:14px;font-size:13px;color:var(--mut);line-height:1.65">
@@ -161,9 +163,12 @@
   <div class="upd" id="upd"></div>
   <div class="foot">Signal only — sizing and execution are yours. The rule is a low-drawdown dip-buy validated on 2024–26 (a bull stretch); a sustained bear weakens it. Hold ~40h, size 1–2x. Not financial advice.</div>
 </div>
-
+ 
 <script>
 const HOLD_H=40, REFRESH_MS=30000, PRICE_MS=5000;
+// Inline signup posts straight into your Google Form (no service approval needed). Fill these two:
+const SIGNUP_FORM_ACTION="https://docs.google.com/forms/d/e/1FAIpQLSd-5HR9R0I9UcfUViZ4tRQVj3WYXbdff80ntuPUUQs4fvJCWA/formResponse";
+const SIGNUP_ENTRY="entry.934461726";
 const pct=(s,q)=>{if(!s.length)return NaN;const i=(s.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(i-lo);};
 const rank=(s,v)=>{let lo=0,hi=s.length;while(lo<hi){const m=(lo+hi)>>1;if(s[m]<v)lo=m+1;else hi=m;}return lo/s.length;};
 function signalState(history,thr,now){
@@ -176,10 +181,10 @@ function signalState(history,thr,now){
   if(cur<=thr)return{cur,state:"LONG_SETUP",trig:now};
   return{cur,state:"WAIT",trig};
 }
-
+ 
 const J=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json();};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-
+ 
 // ---- data sources (return {funding:[[t,rate]...asc], candles:[[t,close]...asc]}) ----
 async function okx(){
   let after=Date.now(),fund=[];
@@ -210,26 +215,26 @@ async function getData(src){
   let last;for(const [name,fn] of order){try{const d=await fn();if(d.funding.length>30)return {name,...d};}catch(e){last=e;}}
   throw last||new Error("no source");
 }
-
+ 
 const $=id=>document.getElementById(id);
 const fPct=v=>(v>0?"+":"")+(v*100).toFixed(4)+"%";
 const fH=ms=>{const h=ms/3600000;return h<1?Math.round(h*60)+"m":h.toFixed(1)+"h";};
 const priceAt=(candles,t)=>{let best=candles[0];for(const c of candles){if(c[0]<=t)best=c;else break;}return best[1];};
-
+ 
 function render(d){
   const fr=d.funding,rates=fr.map(x=>x[1]),s=[...rates].sort((a,b)=>a-b);
   const thr=pct(s,0.05),now=Date.now();
   const st=signalState(fr,thr,now);
   const price=d.candles.length?d.candles[d.candles.length-1][1]:null;
-
+ 
   $("curf").textContent=fPct(st.cur);$("curf").className="v "+(st.cur<=thr?"pos":st.cur>pct(s,0.95)?"neg":"neu");
   $("thr").textContent=fPct(thr);
   $("px").textContent=price?("$"+Math.round(price).toLocaleString()):"—";
   const rk=rank(s,st.cur);$("ranklab").textContent=`${(rk*100).toFixed(0)}th pct`;
-
+ 
   // gauge marks (map percentile rank to 0-100%)
   $("gnow").style.left=(rk*100)+"%";$("gthr").style.left="5%";
-
+ 
   const tradeEl=$("trade");
   window.__sigstate=st.state; window.__entryPrice=null;
   if(st.state==="IN_TRADE"){
@@ -253,7 +258,7 @@ function render(d){
     $("detail").innerHTML=`Funding is normal (not crowded short). No setup. Threshold to trigger: <b>${fPct(thr)}</b>.`;
     tradeEl.style.display="none";
   }
-
+ 
   // histogram
   const mn=Math.min(...rates),mx=Math.max(...rates),BN=44,w=(mx-mn)/BN||1,h=new Array(BN).fill(0);
   for(const v of rates){let b=Math.floor((v-mn)/w);b=Math.max(0,Math.min(BN-1,b));h[b]++;}
@@ -264,16 +269,16 @@ function render(d){
   svg+=`<line x1="${xt}" y1="0" x2="${xt}" y2="${H}" stroke="#1fe39a" stroke-dasharray="3 3"/>`;
   svg+=`<line x1="${Math.max(0,Math.min(W,xc))}" y1="0" x2="${Math.max(0,Math.min(W,xc))}" y2="${H}" stroke="#fff" stroke-width="1.5"/>`;
   $("hist").innerHTML=svg;
-
+ 
   // expose funding+threshold so the interactive price chart can shade long setups
   window.__fr=fr; window.__thr=thr;
   if (typeof pxSeries !== "undefined" && pxSeries.length) pxDraw();
-
+ 
   $("rule").innerHTML=`<b>The rule:</b> when funding drops to its bottom 5% (≤ <b>${fPct(thr)}</b>), go <b>long</b> and hold <b>${HOLD_H}h</b>, size 1–2x. Backtest 2024–26: ~+40% at 1x with only −9% max drawdown, 0 liquidations. Source: ${d.name} · ${rates.length} funding prints.`;
   $("upd").textContent=`updated ${new Date().toLocaleTimeString()} · auto-refresh ${REFRESH_MS/1000}s`;
   window.__price = price;
 }
-
+ 
 // ---- paper portfolio: a core BTC hold + a strategy cash reserve ----
 const PAPER_REPO   = "pi3rsmcgowin-code/btc-watcher";  // change if your repo differs
 const CORE_BTC     = 0.5;       // BTC you simply hold (long-term core)
@@ -310,23 +315,23 @@ async function renderPaper(){
   const n=rows.length, wins=rows.filter(t=>+t.net_pct>0).length;
   const closedEq = n ? +rows[n-1].equity : 1;
   window.__closedEq = closedEq; window.__firstPx = n ? +rows[0].entry_px : null;
-
+ 
   $("pstatus").textContent = n ? `${n} trades` : "0 trades";
   $("p_start").textContent = `core ${CORE_BTC} BTC + $${STRATEGY_USD.toLocaleString()}`;
   $("p_wr").textContent = n ? Math.round(wins/n*100)+"%" : "—";
   updatePortfolioValue(window.__price);   // VALUE + RETURN + holdings (also runs on the fast price tick)
-
+ 
   window.__paperRows = rows;
   renderHistory(rows);
   if (typeof pvLoad === "function") pvLoad();
-
+ 
   $("ptrades").innerHTML = n ? rows.slice(-4).reverse().map(t=>{
     const c=+t.net_pct>=0?"var(--long)":"var(--short)";
     return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--bord)">`+
       `<span>${t.exit} · ${t.held_h}h</span><span style="color:${c}">${(+t.net_pct>=0?"+":"")+t.net_pct}%</span></div>`;}).join("") : "";
   $("pmsg").style.display="none";
 }
-
+ 
 // ---- interactive BTC price chart (tabs + hover crosshair) ----
 const PX_RANGES={ "1D":["15m",96], "5D":["1H",120], "1M":["4H",180], "1Y":["1D",365], "3Y":["1D",1095], "ALL":["1D",1600] };
 let pxRange="1M", pxSeries=[], pxBase="", pxLo=0, pxHi=1, pxYf=v=>v;
@@ -401,7 +406,7 @@ function pxInit(){
   svg.addEventListener("touchend",pxHide);
   pxLoad(pxRange);
 }
-
+ 
 async function run(){
   try{$("err").style.display="none";render(await getData($("src").value));}
   catch(e){$("err").style.display="block";$("err").textContent=`feed error (${e.message}). switch source top-right, or enable a VPN for binance.`;}
@@ -427,7 +432,7 @@ function renderHistory(rows){
     </div>`;
   }).join("") + `<div style="font-size:11px;color:var(--mut2);margin-top:10px">Times shown in your local timezone. Net % includes funding carry − 0.07% cost.</div>`;
 }
-
+ 
 // ---- portfolio value chart: measures YOUR portfolio from INCEPTION (not BTC's full history) ----
 // value(t) = core BTC hold * price(t) + strategy reserve * equity(t), only for t >= INCEPTION.
 // Tabs pick a %-change lookback; any window longer than the account's age shows N/A.
@@ -492,7 +497,7 @@ function pvInit(){
   svg.addEventListener("touchend",pvHide);
   pvLoad();
 }
-
+ 
 function fetchLastPrice(){return J(`https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT-SWAP`).then(j=>+j.data[0].last).catch(()=>null);}
 async function tickPrice(){
   const p=await fetchLastPrice(); if(!p) return;
@@ -504,6 +509,15 @@ let t,tp;function start(){clearInterval(t);clearInterval(tp);run();tickPrice();t
 $("src").addEventListener("change",start);
 $("helptoggle").addEventListener("click",()=>{const b=$("helpbody"),open=b.style.display!=="none";b.style.display=open?"none":"block";$("helpchev").textContent=open?"▸":"▾";});
 $("thtoggle").addEventListener("click",()=>{const b=$("thbody"),open=b.style.display!=="none";b.style.display=open?"none":"block";$("thchev").textContent=open?"▸":"▾";});
+function submitSignup(){
+  const el=$("subemail"),msg=$("submsg"),email=el.value.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ msg.style.color="var(--short)"; msg.textContent="Please enter a valid email."; return; }
+  const fd=new FormData(); fd.append(SIGNUP_ENTRY,email);
+  fetch(SIGNUP_FORM_ACTION,{method:"POST",mode:"no-cors",body:fd}).catch(()=>{});
+  msg.style.color="var(--long)"; msg.textContent="✓ You're subscribed! Watch for the next alert."; el.value="";
+}
+$("subbtn").addEventListener("click",submitSignup);
+$("subemail").addEventListener("keydown",e=>{ if(e.key==="Enter") submitSignup(); });
 pxInit();
 pvInit();
 start();
