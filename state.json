@@ -1,1 +1,1 @@
-{"last": "LONG", "trade": {"entry_ts": 1782376731489, "entry_price": 61690.3}, "paper": {"equity": 1.0, "n": 0, "wins": 0, "trades": [], "first_price": 61690.3, "first_ts": 1782376731489}, "last_heartbeat": 1781960393451}
+{"last": "OTHER", "trade": {"entry_ts": 1782376731489, "entry_price": 61690.3}, "paper": {"equity": 1.0, "n": 0, "wins": 0, "trades": [], "first_price": 61690.3, "first_ts": 1782376731489}, "last_heartbeat": 1781960393451}
