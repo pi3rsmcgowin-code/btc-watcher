@@ -3,7 +3,12 @@ name: btc-long-watcher
 on:
   schedule:
     - cron: "*/5 * * * *"    # every 5 min (UTC); GitHub may delay/skip some runs under load
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_broadcast:
+        description: "Send a TEST alert to you + all subscribers"
+        type: boolean
+        default: false
  
 permissions:
   contents: write
@@ -16,16 +21,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Check funding, alert, paper-trade, broadcast
+      - name: Check funding, alert, paper-trade
         env:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
+          SUBSCRIBERS: ${{ vars.SUBSCRIBERS }}
+          SUBSCRIBERS_CSV_URL: ${{ vars.SUBSCRIBERS_CSV_URL }}
           USE_AI_EXIT: ${{ vars.USE_AI_EXIT }}
           HEARTBEAT_HOURS: ${{ vars.HEARTBEAT_HOURS }}
+          TEST_BROADCAST: ${{ inputs.test_broadcast }}
         run: python watch.py
       - name: Save state and paper log
         run: |
