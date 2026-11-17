@@ -1,6 +1,6 @@
 # Paper-trading record (1x, fee+carry modeled)
 
-_PAPER (1x): 6 trades, 17% win, total -12.2% | BTC buy&hold since start +5.4%_
+_PAPER (1x): 6 trades, 17% win, total -12.2% | BTC buy&hold since start +4.7%_
 
 | entry (UTC) | exit | held h | entry $ | exit $ | price % | carry % | net % | equity x |
 |---|---|---|---|---|---|---|---|---|
