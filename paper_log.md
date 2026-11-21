@@ -1,6 +1,6 @@
 # Paper-trading record (1x, fee+carry modeled)
 
-_PAPER (1x): 7 trades, 14% win, total -15.4% | BTC buy&hold since start -5.5%_
+_PAPER (1x): 8 trades, 12% win, total -19.0% | BTC buy&hold since start -2.3%_
 
 | entry (UTC) | exit | held h | entry $ | exit $ | price % | carry % | net % | equity x |
 |---|---|---|---|---|---|---|---|---|
@@ -11,5 +11,6 @@ _PAPER (1x): 7 trades, 14% win, total -15.4% | BTC buy&hold since start -5.5%_
 | 2026-10-22 00:26 | 2026-10-22 10:02 | 9.6 | 84,168 | 81,993 | -2.58 | -0.01 | -2.66 | 0.9354 |
 | 2026-11-13 14:44 | 2026-11-16 07:35 | 64.8 | 69,140 | 64,930 | -6.09 | -0.008 | -6.17 | 0.8777 |
 | 2026-11-18 05:51 | 2026-11-18 22:16 | 16.4 | 64,673 | 62,388 | -3.53 | -0.009 | -3.61 | 0.846 |
+| 2026-11-19 03:30 | 2026-11-21 19:20 | 63.8 | 62,944 | 60,288 | -4.22 | +0.014 | -4.28 | 0.8098 |
 
 _Net % = price move + funding carry − 0.07% cost. Paper only. Not financial advice._
